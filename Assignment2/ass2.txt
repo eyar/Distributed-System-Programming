@@ -1,0 +1,53 @@
+Distributed System Programming - Assignment 2 - Word Relatedness
+
+Eyar Gilad 300309937 eyarg@post.bgu.ac.il
+
+Corpus used: 5gram British English - 3,044,234,000 Records	26.4 GB
+
+Run instructions: java -jar extractRelatedPairs.jar N // N - Number of best results for each measure
+Output for each decade is located at s3://ass2wordrelatedness/output3/ 
+
+Number of key-value pairs that were sent from the mappers to the reducers:  Step 1: 1260959316 records, 24265870887 bytes
+																			Step 2: 55993266 records,	1541460620 bytes
+																			Step 3: 83989899 records, 	13222997538 bytes
+
+-good and bad examples for each measure: Dice: 				 Good: Every result that scored 1.0
+															 Bad:  Every result that scored lowest
+										 Geometric Mean:  	 Good: Every result that scored Highest Or lowest
+															 Bad:  Every result that scored middle score
+										 Joint Probability:  Good: Every result that scored Highest
+															 Bad:  Every result that scored lowest
+-Which measure gives the best results?	Joint Probability seems like the most relevant results taking the highest 
+										score. Takin lowest score for example would give good results for the Dice
+										measure.
+-Do different decades have different related word pairs? 	Yes, but you can see that the same words repeat
+															in every decade in different combinations.
+-Did you find anything interesting in that regard? Numbers are the most used words constantly!!
+
+##############################################Implementation Notes#################################################
+In Every step a partitioner is used to process all pairs of same decade in same reducer.
+The work is implemented in 3 steps as follows:
+######Step 1#######
+Map  -  Every 5 gram is splitted into pairs of non-stop-words while base word is middle one.
+		Each pair is then splitted into 4 chunks in the following format: 	decade baseWord *  : count
+																			decade secondWord *: count
+																			decade baseWord secondWord *  : count
+																			decade secondWord baseWord * *: count
+Reduce - Using the property of sorted mapped output each single word is counted following counting of each 
+		macthing pair or reversed pair that starts with that word.
+		The reversed pair ensures that the pair will be attached with counting of the second word.
+		The output is as follows: 	decade baseWord secondWord: count a<BaseWordCount>
+									decade baseWord secondWord: count b<SecondWordCount>
+		a is notion for base word, b is for secondary word.
+		Here the total number of pairs is counted also passed to the next step by printing to context <*, N>.		
+######Step 2#######
+Map   - An identity map for the sole purpose of using the sorted mapped output for the reducer.
+Reduce - Now we have all neccesery sizes to calculate the requesed measures. The measures are calculated and for 
+		each measure all pairs are written to context with .
+		The output is: measure measureValue: decade pair jointP jointPValue dice diceValue geoMean geoMeanValue
+######Step 3#######
+Map  -	Again we do an identity job for sorting;
+Sort -  Mapped output sorting is overridden with custom descending order sorting - ReverseComparator class
+Reduce - Now that we have the output sorted for each measure, we take the K (CLI argument) highest result and 
+		write them to context with serial counting as follows: 
+		measure-serialNum: decade pair jointP jointPValue dice diceValue geoMean geoMeanValue
